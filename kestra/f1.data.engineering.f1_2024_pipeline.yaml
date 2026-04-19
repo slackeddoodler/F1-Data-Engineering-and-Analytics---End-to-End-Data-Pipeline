@@ -1,0 +1,120 @@
+id: f1_2024_pipeline
+namespace: f1.data.engineering
+description: "Extracts F1 2024 Race & Sprint results and loads them into MotherDuck."
+
+tasks:
+  - id: extract_load_f1data
+    type: io.kestra.plugin.scripts.python.Script
+    taskRunner:
+      type: io.kestra.plugin.scripts.runner.docker.Docker
+    containerImage: python:3.11-slim
+    env:
+      MOTHERDUCK_TOKEN: "{{ secret('MOTHERDUCK_TOKEN') }}"
+    script: |
+      import fastf1
+      import duckdb
+      import pandas as pd
+      import os
+
+      cache_dir = '/tmp/fastf1_cache'
+      os.makedirs(cache_dir, exist_ok=True)
+
+      fastf1.Cache.enable_cache(cache_dir)
+
+      con = duckdb.connect('md:raw_data')
+      
+      schedule = fastf1.get_event_schedule(2024, include_testing=False)
+      results_list = []
+      laps_list = []
+
+      for _, event in schedule.iterrows():
+              
+          for session_type in ['Sprint', 'Race']:
+            if session_type == 'Sprint' and event['EventFormat'] == 'conventional':
+                  continue
+
+            try:
+                session = fastf1.get_session(2024, event['EventName'], session_type)
+                session.load(telemetry=False, weather=False, messages=False)
+                
+                if session.results is not None and not session.results.empty:
+                    res_df = session.results.copy()
+                    res_df['SessionType'] = session_type
+                    res_df['RoundNumber'] = event['RoundNumber']
+                    res_df['EventName'] = event['EventName']
+                    results_list.append(res_df)
+                    
+                if hasattr(session, 'laps') and session.laps is not None and not session.laps.empty:
+                    laps_df = session.laps.copy()
+                    laps_df['EventName'] = event['EventName']
+                    laps_df['SessionType'] = session_type
+                    laps_df['RoundNumber'] = event['RoundNumber']
+                    laps_list.append(laps_df)
+                    
+            except Exception as e:
+                print(f"Skipping {session_type} for {event['EventName']}: {e}")
+
+      all_results = pd.concat(results_list, ignore_index=True) if results_list else pd.DataFrame()
+      all_laps = pd.concat(laps_list, ignore_index=True) if laps_list else pd.DataFrame()
+
+      if not all_results.empty:
+          con.execute("CREATE OR REPLACE TABLE raw_f1_results AS 
+            SELECT
+              EventName AS event_name,
+              RoundNumber AS round_number,
+              SessionType AS session_type,
+              DriverNumber AS driver_number,
+              Abbreviation AS abbreviation,
+              FullName AS full_name,
+              TeamName AS team_name,
+              TeamColor AS team_color,
+              Position AS position,
+              ClassifiedPosition AS classified_position,
+              GridPosition AS grid_position,
+              Time AS race_finish_time,
+              Status AS status,
+              Points AS points,
+              Laps AS laps
+            FROM all_results")
+      
+      if not all_laps.empty:
+          con.execute("CREATE OR REPLACE TABLE raw_f1_laps AS 
+            SELECT
+              EventName AS event_name,
+              RoundNumber AS round_number,
+              SessionType AS session_type 
+              Time AS time,		
+              Driver AS driver,			
+              DriverNumber AS driver_number,		
+              LapTime AS lap_time,	
+              LapNumber	AS lap_number,
+              Stint	AS stint,
+              PitOutTime AS pit_out_time,			
+              PitInTime	AS pit_in_time,		
+              Sector1Time	AS sector_1_time,			
+              Sector2Time	AS sector_2_time,
+              Sector3Time AS sector_3_time,
+              Sector1SessionTime AS sector_1_session_time,			
+              Sector2SessionTime AS sector_2_session_time,
+              Sector3SessionTime AS sector_3_session_time,
+              SpeedI1,			
+              SpeedI2,			
+              SpeedFL,			
+              SpeedST,	
+              IsPersonalBest AS is_personal_best,			
+              Compound AS compound,		
+              TyreLife AS tyre_life,		
+              FreshTyre	AS fresh_tyre,		
+              Team AS team,		
+              LapStartTime AS lap_start_time,			
+              LapStartDate AS lap_start_date,		
+              TrackStatus AS track_status,		
+              Position AS position,
+              Deleted AS deleted,
+              DeletedReason	AS deleted_reason,			
+              FastF1Generated	AS fast_f1_generated,		
+              IsAccurate AS is_accurate
+            FROM all_laps")
+    
+    beforeCommands:
+      - pip install --no-cache-dir fastf1 duckdb==1.5.1 pandas

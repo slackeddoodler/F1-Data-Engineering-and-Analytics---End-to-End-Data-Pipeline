@@ -1,0 +1,7 @@
+sources:
+  - name: f1_data
+    database: raw_data
+    schema: main
+    tables:
+      - name: raw_f1_results
+      - name: raw_f1_laps
