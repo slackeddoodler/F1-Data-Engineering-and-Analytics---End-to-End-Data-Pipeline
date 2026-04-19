@@ -71,10 +71,23 @@ CREATE DATABASE raw_data;
 
 ---
 
-#### 5. Transformation (dbt)
-1.  Install dbt by running `pip install dbt-duckdb`
-2.  Navigate to the `~/.dbt/` folder.
-3.  **Action Required:** Paste `profiles.yml` and update the `token` field with your MotherDuck Service Token (or use an environment variable).
+### 5. Transformation (dbt)
+
+1.  **Initialize the Project:**
+    Run the following command to create your dbt workspace. When prompted for a name, use `f1_project`:
+    ```bash
+    dbt init f1_project
+    ```
+
+2.  **Configure your Profile:**
+    dbt requires a `profiles.yml` file to authenticate with MotherDuck.
+    * Navigate to your dbt configuration directory (usually `~/.dbt/` on macOS/Linux or `%USERPROFILE%\.dbt\` on Windows).
+    * Replace the existing `profiles.yml` with the version provided in this repository.
+    * **Action Required:** Open the file and ensure you update the `token` placeholder with your actual MotherDuck API token.
+
+3.  **Import Models:**
+    To ensure the transformations are ready to run, copy the SQL files from the `/models` directory in this repository and paste them into the `f1_project/models` folder created during initialization.
+
 4.  Run the following command to build the models:
     ```bash
     dbt run
