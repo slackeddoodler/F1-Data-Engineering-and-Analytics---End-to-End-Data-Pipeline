@@ -96,4 +96,4 @@ CREATE DATABASE raw_data;
 
 ## 📂 Project Structure
 * `/kestra`: Workflow YAMLs and orchestration config.
-* `/dbt`: dbt project, including `profiles.yml` (placeholder) and `/models` for SQL transformations.
+* `/models`: Contains SQL transformations.
