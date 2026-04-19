@@ -1,0 +1,6 @@
+f1_project:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'md:raw_data?motherduck_token=<YOUR_MOTHERDUCK_TOKEN>'
